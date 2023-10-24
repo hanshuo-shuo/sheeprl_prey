@@ -1,0 +1,50 @@
+# @package _global_
+
+defaults:
+  - override /algo: dreamer_v3
+  - override /env: gym
+  - _self_
+
+wrapper:
+  _target_: gymnasium.make
+  id: ${env.id}
+  render_mode: None
+  from_vectors: True
+  max_episode_steps : 300
+
+
+# Experiment
+total_steps: 400000
+per_rank_batch_size: 16
+per_rank_sequence_length: 64
+# Checkpoint
+checkpoint:
+  every: 100000
+
+# Buffer
+buffer:
+  size: 1000000
+  checkpoint: False
+
+# Distribution
+distribution:
+  type: "auto"
+
+
+
+mlp_keys:
+  encoder:
+    - state
+
+# Algorithm
+algo:
+  learning_starts: 10000
+  train_every: 10
+  mlp_layers: 2
+  world_model:
+    recurrent_model:
+      recurrent_state_size: 256
+    transition_model:
+      hidden_size: 256
+    representation_model:
+      hidden_size: 256

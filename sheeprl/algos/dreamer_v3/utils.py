@@ -157,3 +157,51 @@ def uniform_init_weights(given_scale):
                 m.bias.data.fill_(0.0)
 
     return f
+
+
+@torch.no_grad()
+def test_vis(
+    player: "PlayerDV3",
+    fabric: Fabric,
+    cfg: Dict[str, Any],
+    test_name: str = "",
+    sample_actions: bool = False,
+):
+    log_dir = fabric.logger.log_dir if len(fabric.loggers) > 0 else os.getcwd()
+    env: gym.Env = make_env(cfg, cfg.seed, 0, log_dir, "test" + (f"_{test_name}" if test_name != "" else ""))()
+
+    done = False
+    cumulative_rew = 0
+    device = 'cpu'
+    next_obs = env.reset(seed=cfg.seed)[0]
+    for k in next_obs.keys():
+        next_obs[k] = torch.from_numpy(next_obs[k]).view(1, *next_obs[k].shape).float()
+    player.num_envs = 1
+    player.init_states()
+    while not done:
+        # Act greedly through the environment
+        preprocessed_obs = {}
+        for k, v in next_obs.items():
+            if k in cfg.cnn_keys.encoder:
+                preprocessed_obs[k] = v[None, ...].to(device) / 255
+            elif k in cfg.mlp_keys.encoder:
+                preprocessed_obs[k] = v[None, ...].to(device)
+        real_actions = player.get_greedy_action(
+            preprocessed_obs, sample_actions, {k: v for k, v in preprocessed_obs.items() if k.startswith("mask")}
+        )
+        if player.actor.is_continuous:
+            real_actions = torch.cat(real_actions, -1).cpu().numpy()
+        else:
+            real_actions = np.array([real_act.cpu().argmax(dim=-1).numpy() for real_act in real_actions])
+
+        # Single environment step
+        next_obs, reward, done, truncated, _ = env.step(real_actions.reshape(env.action_space.shape))
+        env.render()
+        for k in next_obs.keys():
+            next_obs[k] = torch.from_numpy(next_obs[k]).view(1, *next_obs[k].shape).float()
+        done = done or truncated or cfg.dry_run
+        cumulative_rew += reward
+    fabric.print("Test - Reward:", cumulative_rew)
+    if len(fabric.loggers) > 0:
+        fabric.logger.log_metrics({"Test/cumulative_reward": cumulative_rew}, 0)
+    env.close()

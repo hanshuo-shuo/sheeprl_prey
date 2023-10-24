@@ -14,7 +14,7 @@ from omegaconf import DictConfig, OmegaConf
 from sheeprl.utils.callback import CheckpointCallback
 from sheeprl.utils.registry import tasks
 from sheeprl.utils.utils import dotdict, print_config
-
+import prey_env
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(cfg: DictConfig):
