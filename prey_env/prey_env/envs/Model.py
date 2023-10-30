@@ -2,7 +2,8 @@ import time
 from threading import Thread
 from cellworld import *
 from Agent import Agent, AgentData, AgentAction
-
+import gc
+import matplotlib.pyplot as plt
 class Model:
 
     def __init__(self,
@@ -20,11 +21,6 @@ class Model:
         self.arena_polygon = Polygon(self.world.implementation.space.center, 6,
                                      self.world.implementation.space.transformation.size / 2,
                                      self.world.implementation.space.transformation.rotation)
-
-        # self.occlusions_polygons = Polygon_list.get_polygons(Location_list(c.location for c in self.world.cells.occluded_cells()),
-        #                                                      6,
-        #                                                      self.world.implementation.cell_transformation.size / 2 * 1.05,
-        #                                                      self.world.implementation.cell_transformation.rotation)
         self.occlusions_polygons = Polygon_list.get_polygons([c.location for c in self.world.cells.occluded_cells()],
                                                              6,
                                                              self.world.implementation.cell_transformation.size / 2 * 1.05,
@@ -103,8 +99,8 @@ class Model:
                                location=agent_data.location,
                                rotation=to_degrees(agent_data.theta),
                                color=agent_data.color,
-                               size=15,
-                               show_trajectory=False)
+                               size=15, # show_trajectory=False
+                               )
         self.display.update()
 
     def set_agent_position(self, pagent_name: str,
@@ -128,3 +124,28 @@ class Model:
                                                   pcolor=pcolor,
                                                   pauto_update=pauto_update)
         self.display.set_agent_marker(pagent_name, Agent_markers.arrow())
+
+    def clear_memory(self):
+        # Stop any running threads
+        self.stop()
+
+        # Clear agents and agent data
+        self.agents.clear()
+        self.agents_data.clear()
+
+        # Delete display object
+        del self.display
+
+        # Close any matplotlib figures
+        plt.clf()
+        plt.close('all')
+
+        # Nullify references
+        self.world = None
+        self.thread = None
+        self.arena_polygon = None
+        self.occlusions_polygons = None
+        self.visibility = None
+
+        # Invoke garbage collector to free up memory
+        gc.collect()

@@ -11,7 +11,8 @@ import numpy as np
 
 class Environment(Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
-    def __init__(self, e: int = 2,
+    def __init__(self,
+                 e: int = 2,
                  freq: int = 100,
                  has_predator = True,
                  real_time: bool = False,
@@ -20,9 +21,10 @@ class Environment(Env):
                  predator_speed: float = 0.2,
                  env_type: str = "train",
                  env_random: bool = False,
-                 penalty: int = -10,
+                 penalty: int = -50,
                  reward: int = 100,
-                 render_mode = None):
+                 render_mode = None,
+                 action_noise: bool = False):
         if env_type == "train":
             world_name = "%02i_%02i" % (random.randint(0, 10), e)
         elif env_type == "test":
@@ -34,6 +36,7 @@ class Environment(Env):
         self.prey_agent = prey_agent
         self.env_type = env_type
         self.env_random = env_random
+        self.action_noise = action_noise
         self.e = e
         self.world = World.get_from_parameters_names("hexagonal", "canonical", world_name)
         self.model = Model(pworld=self.world, freq=self.freq, real_time=self.real_time)
@@ -48,7 +51,7 @@ class Environment(Env):
         self.current_episode_reward = 0
         self.predator = None
         self.predator_speed = predator_speed
-        self.goal_threshold = self.world.implementation.cell_transformation.size / 2
+        self.goal_threshold = self.world.implementation.cell_transformation.size
         self.capture_threshold = self.world.implementation.cell_transformation.size
         self.goal_area = self.model.display.circle(location=self.goal_location,
                                                    color="g",
@@ -133,11 +136,12 @@ class Environment(Env):
         continuous_row = -1 + row * bin_width
         continuous_col = -1 + col * bin_width
 
-        # Adding noise in eval.py
-        noise_level, action_shape = 0.5, 2
-        rand_noise = np.random.randn(action_shape) * noise_level
-        continuous_row += rand_noise[0]
-        continuous_col += rand_noise[1]
+
+        if self.action_noise:
+            noise_level, action_shape = 0.5, 2
+            rand_noise = np.random.randn(action_shape) * noise_level
+            continuous_row += rand_noise[0]
+            continuous_col += rand_noise[1]
 
         return continuous_row, continuous_col
 
@@ -229,14 +233,16 @@ class Environment(Env):
 
     def reset(self, seed=None, options = None):
         self.complete = True
-        import matplotlib.pyplot as plt
-        plt.close('all')
+        self.model.clear_memory()
         e = self.e  # Assuming 'e' is an instance variable
         if self.env_type == "train":
             world_name = "%02i_%02i" % (random.randint(0, 10), e)
         else:
             world_name = "%02i_%02i" % (random.randint(11, 19), e)
+        #occlusions = Cell_group_builder.get_from_name("hexagonal", world_name, "occlusions")
+        #self.world.set_occlusions(occlusions)
         self.world = World.get_from_parameters_names("hexagonal", "canonical", world_name)
+        #self.model.world=self.world
         self.model = Model(pworld=self.world, freq=self.freq, real_time=self.real_time)
         self.goal_location = Location(1, .5)
         self.start_location = Location(0, .5)
@@ -244,7 +250,7 @@ class Environment(Env):
                              self.prey_agent,
                              Location(0, 0), 0, "b",
                              pauto_update=self.prey_agent is not None)
-        self.goal_threshold = self.world.implementation.cell_transformation.size / 2
+        self.goal_threshold = self.world.implementation.cell_transformation.size
         self.capture_threshold = self.world.implementation.cell_transformation.size
         self.goal_area = self.model.display.circle(location=self.goal_location,
                                                    color="g",

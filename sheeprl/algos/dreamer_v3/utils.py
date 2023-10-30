@@ -205,3 +205,4 @@ def test_vis(
     if len(fabric.loggers) > 0:
         fabric.logger.log_metrics({"Test/cumulative_reward": cumulative_rew}, 0)
     env.close()
+    return cumulative_rew
