@@ -6,9 +6,10 @@ if not _IS_MINERL_0_4_4_AVAILABLE:
 import copy
 from typing import Any, Dict, Optional, SupportsFloat, Tuple
 
-import gymnasium as gym
+import gymnasium
 import minerl
 import numpy as np
+from gymnasium import core
 from minerl.herobraine.hero import mc
 
 from sheeprl.envs.minerl_envs.navigate import CustomNavigate
@@ -43,7 +44,7 @@ ITEM_ID_TO_NAME = dict(enumerate(mc.ALL_ITEMS))
 ITEM_NAME_TO_ID = dict(zip(mc.ALL_ITEMS, range(N_ALL_ITEMS)))
 
 
-class MineRLWrapper(gym.Wrapper):
+class MineRLWrapper(core.Env):
     """Wrapper for the MineRL environments.
 
     Args:
@@ -92,8 +93,7 @@ class MineRLWrapper(gym.Wrapper):
         if "navigate" not in id.lower():
             kwargs.pop("extreme", None)
 
-        env = CUSTOM_ENVS[id.lower()](break_speed=break_speed_multiplier, **kwargs).make()
-        super().__init__(env)
+        self._env = CUSTOM_ENVS[id.lower()](break_speed=break_speed_multiplier, **kwargs).make()
 
         # Creation a mapping between the discrete action space and the MineRL action space.
         # The mapping will have the following form:
@@ -114,9 +114,9 @@ class MineRLWrapper(gym.Wrapper):
         #   }
         self.ACTIONS_MAP = {0: {}}
         act_idx = 1
-        for act in self.env.action_space:
-            if isinstance(self.env.action_space[act], minerl.herobraine.hero.spaces.Enum):
-                act_val = set(self.env.action_space[act].values.tolist()) - {"none"}
+        for act in self._env.action_space:
+            if isinstance(self._env.action_space[act], minerl.herobraine.hero.spaces.Enum):
+                act_val = set(self._env.action_space[act].values.tolist()) - {"none"}
                 act_len = len(act_val)
             elif act != "camera":
                 act_len = 1
@@ -136,34 +136,34 @@ class MineRLWrapper(gym.Wrapper):
             act_idx += act_len
 
         # action and observations space
-        self.action_space = gym.spaces.Discrete(len(self.ACTIONS_MAP))
+        self.action_space = gymnasium.spaces.Discrete(len(self.ACTIONS_MAP))
 
         obs_space = {
-            "rgb": gym.spaces.Box(0, 255, (3, 64, 64), np.uint8),
-            "life_stats": gym.spaces.Box(0.0, np.array([20.0, 20.0, 300.0]), (3,), np.float32),
+            "rgb": gymnasium.spaces.Box(0, 255, (3, 64, 64), np.uint8),
+            "life_stats": gymnasium.spaces.Box(0.0, np.array([20.0, 20.0, 300.0]), (3,), np.float32),
             # If multihot_inventory, then all the Minecraft objects are included in the inventory vector.
             # Otherwise, only items that can be included in the inventory with respect to the task are considered
             "inventory": (
-                gym.spaces.Box(0.0, np.inf, (N_ALL_ITEMS,), np.float32)
+                gymnasium.spaces.Box(0.0, np.inf, (N_ALL_ITEMS,), np.float32)
                 if multihot_inventory
-                else gym.spaces.Box(0.0, np.inf, (len(self.env.observation_space["inventory"]),), np.float32)
+                else gymnasium.spaces.Box(0.0, np.inf, (len(self._env.observation_space["inventory"]),), np.float32)
             ),
             "max_inventory": (
-                gym.spaces.Box(0.0, np.inf, (N_ALL_ITEMS,), np.float32)
+                gymnasium.spaces.Box(0.0, np.inf, (N_ALL_ITEMS,), np.float32)
                 if multihot_inventory
-                else gym.spaces.Box(0.0, np.inf, (len(self.env.observation_space["inventory"]),), np.float32)
+                else gymnasium.spaces.Box(0.0, np.inf, (len(self._env.observation_space["inventory"]),), np.float32)
             ),
         }
-        if "compass" in self.env.observation_space.spaces:
-            obs_space["compass"] = gym.spaces.Box(-180, 180, (1,), np.float32)
-        if "equipped_items" in self.env.observation_space.spaces:
+        if "compass" in self._env.observation_space.spaces:
+            obs_space["compass"] = gymnasium.spaces.Box(-180, 180, (1,), np.float32)
+        if "equipped_items" in self._env.observation_space.spaces:
             obs_space["equipment"] = (
-                gym.spaces.Box(0.0, 1.0, (N_ALL_ITEMS,), np.int32)
+                gymnasium.spaces.Box(0.0, 1.0, (N_ALL_ITEMS,), np.int32)
                 if multihot_inventory
-                else gym.spaces.Box(
+                else gymnasium.spaces.Box(
                     0.0,
                     1.0,
-                    (len(self.env.observation_space["equipped_items"]["mainhand"]["type"].values.tolist()),),
+                    (len(self._env.observation_space["equipped_items"]["mainhand"]["type"].values.tolist()),),
                     np.int32,
                 )
             )
@@ -171,12 +171,12 @@ class MineRLWrapper(gym.Wrapper):
         # Mapping from names to ids (index in the vector)
         if not multihot_inventory:
             self.inventory_size = obs_space["inventory"].shape[0]
-            self.inventory_item_to_id = dict(zip(self.env.observation_space["inventory"], range(self.inventory_size)))
+            self.inventory_item_to_id = dict(zip(self._env.observation_space["inventory"], range(self.inventory_size)))
             if "equipment" in obs_space:
                 self.equip_size = obs_space["equipment"].shape[0]
                 self.equip_item_to_id = dict(
                     zip(
-                        self.env.observation_space["equipped_items"]["mainhand"]["type"].values.tolist(),
+                        self._env.observation_space["equipped_items"]["mainhand"]["type"].values.tolist(),
                         range(self.equip_size),
                     )
                 )
@@ -186,21 +186,17 @@ class MineRLWrapper(gym.Wrapper):
             if "equipment" in obs_space:
                 self.equip_item_to_id = ITEM_NAME_TO_ID
                 self.equip_size = N_ALL_ITEMS
-        self.observation_space = gym.spaces.Dict(obs_space)
+        self.observation_space = gymnasium.spaces.Dict(obs_space)
         self._pos = {
             "pitch": 0.0,
             "yaw": 0.0,
         }
         self._max_inventory = np.zeros(self.inventory_size)
-        self._render_mode: str = "rgb_array"
+        self.render_mode: str = "rgb_array"
         self.seed(seed=seed)
 
-    @property
-    def render_mode(self) -> str | None:
-        return self._render_mode
-
     def __getattr__(self, name):
-        return getattr(self.env, name)
+        return getattr(self._env, name)
 
     def _convert_actions(self, action: np.ndarray) -> Dict[str, Any]:
         converted_actions = copy.deepcopy(NOOP)
@@ -296,7 +292,7 @@ class MineRLWrapper(gym.Wrapper):
             converted_actions["camera"] = np.array([0, converted_actions["camera"][1]])
             next_pitch = self._pos["pitch"]
 
-        obs, reward, done, info = self.env.step(converted_actions)
+        obs, reward, done, info = self._env.step(converted_actions)
         self._pos = {
             "pitch": next_pitch,
             "yaw": next_yaw,
@@ -307,7 +303,7 @@ class MineRLWrapper(gym.Wrapper):
     def reset(
         self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
-        obs = self.env.reset()
+        obs = self._env.reset()
         self._max_inventory = np.zeros(self.inventory_size)
         self._sticky_attack_counter = 0
         self._sticky_jump_counter = 0
@@ -318,4 +314,8 @@ class MineRLWrapper(gym.Wrapper):
         return self._convert_obs(obs), {}
 
     def render(self, mode: Optional[str] = "rgb_array"):
-        return self.env.render(self.render_mode)
+        return self._env.render(self.render_mode)
+
+    def close(self):
+        self._env.close()
+        return super().close()

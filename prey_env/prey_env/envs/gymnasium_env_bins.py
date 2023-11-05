@@ -12,13 +12,13 @@ import numpy as np
 class Environment(Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
     def __init__(self,
-                 e: int = 2,
+                 e: int = 3,
                  freq: int = 100,
                  has_predator = True,
                  real_time: bool = False,
                  prey_agent: Agent = None,
                  max_step: int = 300,
-                 predator_speed: float = 0.2,
+                 predator_speed: float = 0.8,
                  env_type: str = "train",
                  env_random: bool = False,
                  penalty: int = -50,
